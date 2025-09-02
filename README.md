@@ -44,6 +44,7 @@ docker compose exec -u node n8n n8n update:workflow --all --active=true
 ## 🔧 Configuración de Credenciales WhatsApp
 
 **👇👇Video de ayuda para configurar las credenciales de los nodos "WhatsApp Trgigger" y "WhatApp Send Message"👇👇**
+
 `https://www.youtube.com/watch?v=jYnqJmTHGtI`
 
 ### En Meta for Developers:
@@ -61,6 +62,7 @@ En el nodo de Google Gemini Chat Model agregar la credencial con el token de Gem
 ## 🔧 Configuración de Google Drive Credenciales
 
 **👇👇Video de ayuda para configurar las credenciales del nodo "Google Drive"👇👇**
+
 `https://www.youtube.com/watch?v=H6Xkc9cfdrE`
 
 Agregar las credenciales de Google Drive y cambiar el siguiente parametro del nodo:
