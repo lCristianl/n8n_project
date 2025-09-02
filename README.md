@@ -80,7 +80,7 @@ No importa en qué cuenta esté el archivo, lo importante es que la cuenta con l
 Si el archivo está en otra cuenta de Drive, simplemente compártelo con la cuenta que usaste para autenticar n8n (con el correo de esa cuenta de Google).
 
 ## 🔧 Configuración de Gmail Credenciales
-    En las credenciales del nodo Send a message de Gmail agregar el mismo "Client ID" y "Client ID" que se agrego en el nodo Drive y en los parametros del nodo cambiar el correo electronico de la persona que le llegará el Email.
+En las credenciales del nodo Send a message de Gmail agregar el mismo "Client ID" y "Client ID" que se agrego en el nodo Drive y en los parametros del nodo cambiar el correo electronico de la persona que le llegará el Email.
 
 ### Verificar conectividad:
 
