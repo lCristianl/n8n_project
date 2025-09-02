@@ -70,9 +70,13 @@ Agregar las credenciales de Google Drive y cambiar el siguiente parametro del no
 - **File (By ID)**: (agregar el id del archivo excel de drive)
 
 **Para sacar el id del archivo excel en Drive se debe abrir el archivo y en la url se debe sacar la siguiente parte de la url: (ID_DEL_ARCHIVO)**
+
 `https://docs.google.com/spreadsheets/d/ID_DEL_ARCHIVO/edit`
+
 **Nota:**
+
 No importa en qué cuenta esté el archivo, lo importante es que la cuenta con la que conectaste n8n tenga acceso (como Editor o al menos Lector).
+
 Si el archivo está en otra cuenta de Drive, simplemente compártelo con la cuenta que usaste para autenticar n8n (con el correo de esa cuenta de Google).
 
 ## 🔧 Configuración de Gmail Credenciales
