@@ -1,0 +1,223 @@
+{
+  "name": "ChatBot",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "options": {
+          "sheetName": "Consolidado"
+        }
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        608,
+        0
+      ],
+      "id": "4cf7c874-f23d-4615-a7d6-a5cd2423463e",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "1Uo3gJTp0ZrRlZ8bJQjtOaWFFaKkTRutl",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        416,
+        0
+      ],
+      "id": "fe2a7a54-78b7-4a7a-9571-9387618de437",
+      "name": "Download file",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "36AhXkwNWxMz9G5r",
+          "name": "Google Drive n8n"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Función para convertir números seriales de Excel a fechas\nfunction convertExcelDate(excelDate) {\n  if (!excelDate || excelDate === '') return null;\n  \n  // Si es un número (fecha serial de Excel)\n  if (!isNaN(excelDate) && typeof excelDate === 'number') {\n    const millisecondsPerDay = 24 * 60 * 60 * 1000;\n    const excelEpoch = new Date(1899, 11, 30); // 30 de diciembre de 1899\n    const jsDate = new Date(excelEpoch.getTime() + excelDate * millisecondsPerDay);\n    \n    // Formatear manualmente para evitar problemas de zona horaria\n    const day = jsDate.getUTCDate().toString().padStart(2, '0');\n    const month = (jsDate.getUTCMonth() + 1).toString().padStart(2, '0');\n    const year = jsDate.getUTCFullYear();\n    \n    return `${day}/${month}/${year}`;\n  }\n  \n  // Si es un string que parece un número\n  if (!isNaN(parseFloat(excelDate)) && isFinite(excelDate)) {\n    const numDate = parseFloat(excelDate);\n    const millisecondsPerDay = 24 * 60 * 60 * 1000;\n    const excelEpoch = new Date(1899, 11, 30);\n    const jsDate = new Date(excelEpoch.getTime() + numDate * millisecondsPerDay);\n    \n    const day = jsDate.getUTCDate().toString().padStart(2, '0');\n    const month = (jsDate.getUTCMonth() + 1).toString().padStart(2, '0');\n    const year = jsDate.getUTCFullYear();\n    \n    return `${day}/${month}/${year}`;\n  }\n  \n  // Si ya es una fecha en formato string, la retornamos tal como está\n  return excelDate;\n}\n\n// Versión más robusta para limpiar el output de gemini\nlet geminiData;\ntry {\n  const geminiOutput = $('AI Agent').first().json.output;\n  \n  // Múltiples formas de limpiar el output\n  let cleanedOutput = geminiOutput\n    .replace(/```json\\s*/gi, '')\n    .replace(/```\\s*/g, '')\n    .replace(/^```.*\\n?/gm, '')\n    .replace(/\\n```$/gm, '')\n    .trim();\n  \n  // Si aún empieza con {, intentar extraer solo el JSON\n  const jsonMatch = cleanedOutput.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    cleanedOutput = jsonMatch[0];\n  }\n  \n  console.log(\"Output limpio final:\", cleanedOutput);\n  geminiData = JSON.parse(cleanedOutput);\n  \n} catch (error) {\n  console.log(\"Error al parsear JSON de GPT:\", error);\n  return [{\n    json: {\n      respuesta: \"❌ Error al procesar la consulta. Intenta reformular tu pregunta.\",\n      error: true\n    }\n  }];\n}\n\n// Obtener los datos de las cooperativas y formatear fechas\nconst cooperativasDataRaw = $('Extract from File').all();\n\n// Procesar los datos para formatear fechas\nconst cooperativasData = cooperativasDataRaw.map(item => {\n  const processedItem = { ...item };\n  \n  // Formatear la fecha de último contacto si existe\n  if (processedItem.json['Fecha de ultimo contacto']) {\n    const fechaFormateada = convertExcelDate(processedItem.json['Fecha de ultimo contacto']);\n    if (fechaFormateada) {\n      processedItem.json['Fecha de ultimo contacto'] = fechaFormateada;\n    }\n  }\n  \n  return processedItem;\n});\n\n// Extraer información del JSON de GPT\nconst intencion = geminiData.intencion;\nconst cooperativaBuscada = geminiData.cooperativa;\nconst segmentoBuscado = geminiData.segmento;\nconst provinciaBuscada = geminiData.provincia;\nconst canalesBuscados = geminiData.canales;\nconst visitadoBuscado = geminiData.visitado;\nconst fechaUltimoContactoBuscada = geminiData.fechaUltimoContacto;\nconst personaContactoBuscada = geminiData.personaContacto;\nconst contactoCooperativaBuscada = geminiData.contactoCooperativa;\n\nconsole.log(\"Cooperativa a buscar:\", cooperativaBuscada);\nconsole.log(\"Intención:\", intencion);\nconsole.log(\"Provincia a buscar:\", provinciaBuscada);\nconsole.log(\"Segmento a buscar:\", segmentoBuscado);\nconsole.log(\"Fecha último contacto a buscar:\", fechaUltimoContactoBuscada);\n\n// Función de búsqueda mejorada\nfunction buscarCooperativa(datos, nombreBuscado) {\n  if (!nombreBuscado) return [];\n  \n  const searchTerm = nombreBuscado.toLowerCase();\n  \n  return datos.filter(row => {\n    if (!row.json.COOPERATIVA) return false;\n    \n    const coopName = row.json.COOPERATIVA.toLowerCase();\n    \n    // Búsqueda exacta primero\n    if (coopName === searchTerm) return true;\n    \n    // Luego búsqueda por palabras clave (excluyendo palabras comunes)\n    const palabrasClaves = searchTerm\n      .replace(/cooperativa\\s+(de\\s+)?ahorro\\s+y\\s+cr[eé]dito\\s*/gi, '')\n      .replace(/cooperativa\\s*/gi, '')\n      .trim()\n      .split(/\\s+/)\n      .filter(word => word.length > 2); // Solo palabras de más de 2 caracteres\n    \n    if (palabrasClaves.length === 0) return false;\n    \n    // Verificar que todas las palabras clave estén en el nombre\n    return palabrasClaves.every(palabra => coopName.includes(palabra));\n  });\n}\n\n// Función para buscar por criterios específicos\nfunction buscarPorCriterio(datos, criterio, valor) {\n  if (!valor) return [];\n  \n  const valorBusqueda = valor.toLowerCase();\n  \n  return datos.filter(row => {\n    if (!row.json) return false;\n    \n    const valorCampo = row.json[criterio];\n    if (!valorCampo) return false;\n    \n    return valorCampo.toLowerCase().includes(valorBusqueda);\n  });\n}\n\n// Función para formatear múltiples resultados\nfunction formatearMultiplesResultados(resultados, tipoConsulta) {\n  if (resultados.length === 0) return \"\";\n  \n  let respuesta = `📋 *Resultados encontrados: ${resultados.length}*\\n\\n`;\n  \n  resultados.forEach((resultado, index) => {\n    const coop = resultado.json;\n    respuesta += `${index + 1}. 🏛️ *${coop.COOPERATIVA}*\\n`;\n    \n    switch(tipoConsulta) {\n      case 'por_provincia':\n        respuesta += `   📍 *Provincia:* ${coop.PROVINCIA || 'No especificada'}\\n`;        break;\n      case 'por_segmento':\n        respuesta += `   📊 *Segmento:* ${coop.SEGMENTO || 'No especificado'}\\n`;\n        break;\n      case 'por_canales':\n        respuesta += `   📞 *Canales:* ${coop.CANALES || 'No tiene'}\\n`;\n        break;\n      case 'por_visitado':\n        respuesta += `   ✅ *Visitado:* ${coop['Se visito o no'] || 'No registrado'}\\n`;\n        break;\n      case 'por_fechaUltimoContacto':\n        respuesta += `   📅 *Fecha último contacto:* ${coop['Fecha de ultimo contacto'] || 'Sin fecha'}\\n`;\n        break;\n      case 'por_personaContacto':\n        respuesta += `   👤 *Persona que contactó:* ${coop['Persona que contacto'] || 'No registrado'}\\n`;\n        break;\n      case 'por_contactoCooperativa':\n        respuesta += `   🏢 *Contacto en cooperativa:* ${coop['Nombre del contacto en la cooperativa'] || 'No registrado'}\\n`;\n        break;\n      default:\n        respuesta += `   📍 *Provincia:* ${coop.PROVINCIA || 'No especificada'}\\n`;\n        respuesta += `   📊 *Segmento:* ${coop.SEGMENTO || 'No especificado'}\\n`;\n    }\n    respuesta += \"\\n\";\n  });\n  \n  return respuesta;\n}\n\n// Función para limitar el tamaño de la respuesta a menos de 4096 caracteres\nfunction limitarRespuesta(respuesta, maxCaracteres = 4000) {\n  if (respuesta.length <= maxCaracteres) {\n    return respuesta;\n  }\n  \n  // Cortar la respuesta y añadir mensaje de truncamiento\n  const respuestaCorta = respuesta.substring(0, maxCaracteres - 100);\n  const ultimoSalto = respuestaCorta.lastIndexOf('\\n');\n  \n  // Cortar en el último salto de línea para no cortar una línea a la mitad\n  const respuestaFinal = ultimoSalto > 0 ? respuestaCorta.substring(0, ultimoSalto) : respuestaCorta;\n\n  return respuestaFinal + `\\n\\n⚠️ *Resultados limitados debido al límite de caracteres*\\n📝 Se mostraron los primeros resultados`;\n}\n\n// Buscar según la intención\nlet resultados = [];\n\n// Consultas por criterios específicos (búsquedas múltiples)\nif (intencion.startsWith('por_')) {\n  switch(intencion) {\n    case 'por_provincia':\n      resultados = buscarPorCriterio(cooperativasData, 'PROVINCIA', provinciaBuscada);\n      break;\n    case 'por_segmento':\n      resultados = buscarPorCriterio(cooperativasData, 'SEGMENTO', segmentoBuscado);\n      break;\n    case 'por_canales':\n      resultados = buscarPorCriterio(cooperativasData, 'CANALES', canalesBuscados);\n      break;\n    case 'por_visitado':\n      resultados = buscarPorCriterio(cooperativasData, 'Se visito o no', visitadoBuscado);\n      break;\n    case 'por_fechaUltimoContacto':\n      resultados = buscarPorCriterio(cooperativasData, 'Fecha de ultimo contacto', fechaUltimoContactoBuscada);\n      break;\n    case 'por_personaContacto':\n      resultados = buscarPorCriterio(cooperativasData, 'Persona que contacto', personaContactoBuscada);\n      break;\n    case 'por_contactoCooperativa':\n      resultados = buscarPorCriterio(cooperativasData, 'Nombre del contacto en la cooperativa', contactoCooperativaBuscada);\n      break;\n  }\n} else {\n  // Consultas individuales de cooperativas específicas\n  resultados = buscarCooperativa(cooperativasData, cooperativaBuscada);\n}\n\n// Formatear respuesta según la intención\nlet respuesta = \"\";\n\nif (resultados.length > 0) {\n  \n  // Para consultas por criterios (búsquedas múltiples)\n  if (intencion.startsWith('por_')) {\n    respuesta = formatearMultiplesResultados(resultados, intencion);\n  } else {\n    // Para consultas individuales de cooperativas específicas\n    const coop = resultados[0].json;\n    \n    // Responder según la intención específica\n    switch(intencion) {\n      case 'segmento':\n        respuesta = `🏛️ *${coop.COOPERATIVA}*\\n`;\n        respuesta += `📊 *Segmento:* ${coop.SEGMENTO || 'No especificado'}`;\n        break;\n        \n      case 'provincia':\n        respuesta = `🏛️ *${coop.COOPERATIVA}*\\n`;\n        respuesta += `📍 *Provincia:* ${coop.PROVINCIA || 'No especificada'}`;\n        break;\n        \n      case 'canales':\n        respuesta = `🏛️ *${coop.COOPERATIVA}*\\n`;\n        respuesta += `📞 *Canales:* ${coop.CANALES || 'No tiene'}`;\n        break;\n        \n      case 'visitado':\n        respuesta = `🏛️ *${coop.COOPERATIVA}*\\n`;\n        respuesta += `✅ *Visitado:* ${coop['Se visito o no'] || 'No registrado'}\\n`;\n        break;\n\n      case 'fechaUltimoContacto':\n        respuesta = `🏛️ *${coop.COOPERATIVA}*\\n`;\n        respuesta += `📅 *Fecha último contacto:* ${coop['Fecha de ultimo contacto'] || 'Sin fecha'}`;\n        break;\n\n      case 'personaContacto':\n        respuesta = `🏛️ *${coop.COOPERATIVA}*\\n`;\n        respuesta += `👤 *Persona que contactó:* ${coop['Persona que contacto'] || 'No registrado'}\\n`;\n        break;\n\n      case 'contactoCooperativa':\n        respuesta = `🏛️ *${coop.COOPERATIVA}*\\n`;\n        respuesta += `🏢 *Nombre del contacto en cooperativa:* ${coop['Nombre del contacto en la cooperativa'] || 'No registrado'}`;\n        break;\n\n      case 'todos':\n      default:\n        // Información completa\n        respuesta = `🏛️ *${coop.COOPERATIVA}*\\n\\n`;\n        respuesta += `📍 *Provincia:* ${coop.PROVINCIA || 'No especificada'}\\n`;\n        respuesta += `📊 *Segmento:* ${coop.SEGMENTO || 'No especificado'}\\n`;\n        respuesta += `📞 *Canales:* ${coop.CANALES || 'No tiene'}\\n`;\n        respuesta += `✅ *Visitado:* ${coop['Se visito o no'] || 'No'}\\n`;\n        respuesta += `📅 *Fecha último contacto:* ${coop['Fecha de ultimo contacto'] || 'Sin fecha'}\\n`;\n        respuesta += `👤 *Persona que contactó:* ${coop['Persona que contacto'] || 'No registrado'}\\n`;\n        respuesta += `🏢 *Nombre del contacto en cooperativa:* ${coop['Nombre del contacto en la cooperativa'] || 'No registrado'}`;\n    }\n    \n    // Agregar nota si hay múltiples resultados\n    if (resultados.length > 1) {\n      respuesta += `\\n\\n💡 _Se encontraron ${resultados.length} coincidencias. Mostrando la primera._`;\n    }\n  }\n  \n} else {\n  // Mensajes de error personalizados según el tipo de búsqueda\n  if (intencion.startsWith('por_')) {\n    const criterio = intencion.replace('por_', '');\n    let valorBuscado = '';\n    let nombreCriterio = '';\n    \n    switch(criterio) {\n      case 'provincia':\n        valorBuscado = provinciaBuscada;\n        nombreCriterio = 'provincia';\n        break;\n      case 'segmento':\n        valorBuscado = segmentoBuscado;\n        nombreCriterio = 'segmento';\n        break;\n      case 'canales':\n        valorBuscado = canalesBuscados;\n        nombreCriterio = 'canales';\n        break;\n      case 'visitado':\n        valorBuscado = visitadoBuscado;\n        nombreCriterio = 'estado de visita';\n        break;\n      case 'fechaUltimoContacto':\n        valorBuscado = fechaUltimoContactoBuscada;\n        nombreCriterio = 'fecha de último contacto';\n        break;\n      case 'personaContacto':\n        valorBuscado = personaContactoBuscada;\n        nombreCriterio = 'persona de contacto';\n        break;\n      case 'contactoCooperativa':\n        valorBuscado = contactoCooperativaBuscada;\n        nombreCriterio = 'contacto en cooperativa';\n        break;\n    }\n    \n    respuesta = `❌ No encontré cooperativas con ${nombreCriterio}: *\"${valorBuscado}\"*\\n\\n`;\n    respuesta += `💡 *Sugerencias:*\\n`;\n    respuesta += `• Verifica la ortografía\\n`;\n    respuesta += `• Usa términos más generales\\n`;\n    respuesta += `• Intenta con variaciones del nombre`;\n    \n  } else {\n    respuesta = `❌ No encontré información sobre *\"${cooperativaBuscada}\"*\\n\\n`;\n    respuesta += `💡 *Sugerencias:*\\n`;\n    respuesta += `• Verifica la ortografía\\n`;\n    respuesta += `• Usa el nombre completo\\n`;\n    respuesta += `• Intenta solo con palabras clave`;\n  }\n}\n\n// Aplicar límite de caracteres a la respuesta final\nrespuesta = limitarRespuesta(respuesta);\n\nreturn [{ \n  json: { \n    respuesta: respuesta,\n    encontrado: resultados.length > 0,\n    cantidad: resultados.length,\n    debug: {\n      intencion: intencion,\n      cooperativaBuscada: cooperativaBuscada,\n      provinciaBuscada: provinciaBuscada,\n      segmentoBuscado: segmentoBuscado,\n      canalesBuscados: canalesBuscados,\n      visitadoBuscado: visitadoBuscado,\n      fechaUltimoContactoBuscada: fechaUltimoContactoBuscada,\n      personaContactoBuscada: personaContactoBuscada,\n      contactoCooperativaBuscada: contactoCooperativaBuscada,\n      resultadosEncontrados: resultados.length\n    }\n  } \n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        816,
+        0
+      ],
+      "id": "ba19757e-e608-43ae-bee8-1d1fdc6a4372",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "750166208186405",
+        "recipientPhoneNumber": "+593986120496",
+        "textBody": "={{$json[\"respuesta\"]}}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [
+        1024,
+        0
+      ],
+      "id": "699d6b22-bd7c-4a7b-9a34-ab82a8eccea3",
+      "name": "Send message",
+      "webhookId": "c1c92d46-6562-468e-b7ba-2cbb86dfc956",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "0MEQ2GUbf9v7Unm7",
+          "name": "WhatsApp chatbot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "updates": [
+          "messages"
+        ],
+        "options": {}
+      },
+      "type": "n8n-nodes-base.whatsAppTrigger",
+      "typeVersion": 1,
+      "position": [
+        -128,
+        0
+      ],
+      "id": "4e96e571-2d6d-4a0c-876d-e312b087e894",
+      "name": "WhatsApp Trigger chatbot",
+      "webhookId": "321b4b98-9ede-4cf9-a7c5-e01edaaa4791",
+      "credentials": {
+        "whatsAppTriggerApi": {
+          "id": "psf4KKZ9Tl9wNTGX",
+          "name": "WhatsApp Trigger Chatbot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.messages[0].text.body }}",
+        "options": {
+          "systemMessage": "Eres un asistente de consultas sobre cooperativas. \nTienes un archivo con información de cooperativas que incluye: \n- Nombre\n- Segmento\n- Canales\n- Se visito o no\n- Fecha de ultimo contacto\n- Persona que contacto\n- Nombre del contacto en la cooperativa\n\nEl usuario puede pedir:\n- Todos los datos de una cooperativa específica.\n- Solo el segmento de una cooperativa específica.\n- Todas las cooperativas que pertenecen a un segmento.\n- Provincia donde se encuentra una cooperativa específica.\n- Todas las cooperativas que se pertenecen a una provincia.\n- ect.\n\nTu tarea es:\n1. Identificar la intención del usuario: \n   - \"segmento\"\n   - \"provincia\"\n   - \"canales\"\n   - \"visitado\"\n   - \"personaContacto\"\n   - \"contactoCooperativa\"\n   - \"todos\"\n   - \"por_segmento\"\n   - \"por_provincia\"\n   - \"por_canales\"\n   - \"por_visitado\"\n   - \"por_personaContacto\"\n   - \"por_contactoCooperativa\"\n2. Detectar el nombre de la cooperativa (si aplica).\n3. Detectar el número de segmento, o nombre de la provincia, o el canal, etc. (si aplica).\n4. Responder siempre en JSON con esta estructura:\n\n{\n  \"intencion\": \"segmento | provincia | canales | visitado | fechaUltimoContacto | personaContacto | contactoCooperativa | todos | por_segmento | por_provincia | por_canales | por_visitado | por_fechaUltimoContacto | por_personaContacto | por_contactoCooperativa\",\n  \"cooperativa\": \"Nombre encontrado o vacío si no aplica\",\n  \"segmento\": \"Número del segmento o vacío si no aplica\",\n  \"provincia\": \"Nombre de la provincia o vacío si no aplica\",\n  \"canales\": \"Tipo de canal o vacío si no aplica\",\n  \"visitado\": \"Si fue visitado o no, o vacío si no aplica\",\n  \"fechaUltimoContacto\": \"la fecha o vacío si no aplica\",\n  \"personaContacto\": \"Nombre de la persona que contacto o vacío si no aplica\",\n  \"contactoCooperativa\": \"Nombre del contacto en la cooperativa o vacío si no aplica\"\n}\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        96,
+        0
+      ],
+      "id": "04a07351-9a3f-4bcc-8fd0-46f5989eb812",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-pro",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        32,
+        192
+      ],
+      "id": "6f02be7a-5756-416a-b95d-fe892edb46f5",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "BF4F9oOcMfGcx31n",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Download file": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Send message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp Trigger chatbot": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Download file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "bb5a85a0-f36c-43a1-a14e-363b3813f5ac",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "180c0ed70aef2aae145c9bd337f19ba8daf3bd26669a4e072d9205ae4ad10c1a"
+  },
+  "id": "GWtjKdnK5FZ7ab7G",
+  "tags": []
+}
