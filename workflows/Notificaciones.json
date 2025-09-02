@@ -1,0 +1,250 @@
+{
+  "name": "Notificaciones",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 6
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -288,
+        -48
+      ],
+      "id": "59d29de3-789c-4377-9990-f936340cfe35",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "1Ol0D0UBErVuAB-GOAEJ2NFtbMmyWbQX6",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -80,
+        -48
+      ],
+      "id": "0e44387d-7a23-43d8-ae63-cfeca87e0caf",
+      "name": "Download file",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "36AhXkwNWxMz9G5r",
+          "name": "Google Drive n8n"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        128,
+        -48
+      ],
+      "id": "a65bf3e6-5cb5-4384-8aef-6c44db479814",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "jsCode": "const allData = $input.all();\n\n// Saltamos los primeros 2 elementos (índices 0 y 1)\nconst rawData = allData.slice(2);\n\n// Función para convertir números seriales de Excel a fechas\nfunction convertExcelDate(excelDate) {\n  if (!excelDate || excelDate === '') return null;\n  \n  // Si es un número (fecha serial de Excel)\n  if (!isNaN(excelDate) && typeof excelDate === 'number') {\n    // Excel cuenta desde el 1 de enero de 1900, pero tiene un bug que considera 1900 como año bisiesto\n    // Por eso restamos 2 días adicionales para corregir este desfase\n    const millisecondsPerDay = 24 * 60 * 60 * 1000;\n    const excelEpoch = new Date(1899, 11, 30); // 30 de diciembre de 1899\n    const jsDate = new Date(excelEpoch.getTime() + excelDate * millisecondsPerDay);\n    \n    // Formatear manualmente para evitar problemas de zona horaria\n    const day = jsDate.getUTCDate().toString().padStart(2, '0');\n    const month = (jsDate.getUTCMonth() + 1).toString().padStart(2, '0');\n    const year = jsDate.getUTCFullYear();\n    \n    return `${day}/${month}/${year}`;\n  }\n  \n  // Si es un string que parece un número\n  if (!isNaN(parseFloat(excelDate)) && isFinite(excelDate)) {\n    const numDate = parseFloat(excelDate);\n    const millisecondsPerDay = 24 * 60 * 60 * 1000;\n    const excelEpoch = new Date(1899, 11, 30);\n    const jsDate = new Date(excelEpoch.getTime() + numDate * millisecondsPerDay);\n    \n    const day = jsDate.getUTCDate().toString().padStart(2, '0');\n    const month = (jsDate.getUTCMonth() + 1).toString().padStart(2, '0');\n    const year = jsDate.getUTCFullYear();\n    \n    return `${day}/${month}/${year}`;\n  }\n  \n  // Si ya es una fecha en formato string, la retornamos tal como está\n  return excelDate;\n}\n\n// Definir el mapeo de columnas\nconst columnMapping = {\n  '__EMPTY': 'nombreCorto',\n  '__EMPTY_1': 'responsable', \n  '__EMPTY_2': 'ruc',\n  '__EMPTY_3': 'institucion',\n  '__EMPTY_4': 'seguimiento',\n  '__EMPTY_5': 'canales',\n  '__EMPTY_6': 'chatBot',\n  '__EMPTY_7': 'anomalias',\n  '__EMPTY_8': 'om',\n  '__EMPTY_9': 'csCnb',\n  '__EMPTY_10': 'qr',\n  '__EMPTY_11': 'cta',\n  '__EMPTY_12': 'cred',\n  '__EMPTY_13': 'otros',\n  '__EMPTY_14': 'valorFactura',\n  '__EMPTY_15': 'piloto',\n  '__EMPTY_16': 'fechaUltimaGestion',\n  '__EMPTY_17': 'contacto',\n  '__EMPTY_18': 'cargo',\n  '__EMPTY_19': 'telefono',\n  '__EMPTY_20': 'mail',\n  '__EMPTY_21': 'estado'\n};\n\n// Procesar cada fila\nconst processedData = rawData.map((item, index) => {\n  const cleanedItem = {};\n  \n  // Mapear las columnas a nombres más legibles\n  Object.keys(item.json).forEach(key => {\n    const newKey = columnMapping[key] || key;\n    let value = item.json[key];\n    \n    // Si es la fecha, convertirla aquí mismo\n    if (newKey === 'fechaUltimaGestion') {\n      value = convertExcelDate(value);\n    }\n    \n    cleanedItem[newKey] = value;\n  });\n  \n  return {\n    json: cleanedItem\n  };\n});\n\nreturn processedData;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        336,
+        -48
+      ],
+      "id": "f4d84c13-ec26-4d84-ac5c-4983143363fd",
+      "name": "Procesar y limpiar datos"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Este código procesa las fechas y identifica registros que necesitan seguimiento\nconst dataToProcess = $input.all();\nconst currentDate = new Date();\n\n// Función para parsear fechas que ya están en formato string dd/mm/yyyy\nfunction parseDate(dateString) {\n  if (!dateString || dateString === '') return null;\n  \n  // Intentar formato dd/mm/yyyy\n  const match = dateString.toString().match(/(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})/);\n  if (match) {\n    // Crear fecha: new Date(año, mes-1, día)\n    return new Date(match[3], match[2] - 1, match[1]);\n  }\n  \n  // Intentar parseo directo como fallback\n  const parsed = new Date(dateString);\n  return isNaN(parsed) ? null : parsed;\n}\n\n// Procesar registros y calcular días transcurridos\nconst processedRecords = dataToProcess.map(item => {\n  const record = item.json;\n  const fechaGestion = parseDate(record.fechaUltimaGestion);\n  \n  let diasTranscurridos = null;\n  let requiereAlerta = false;\n  \n  if (fechaGestion) {\n    const diffTime = Math.abs(currentDate - fechaGestion);\n    diasTranscurridos = Math.ceil(diffTime / (1000 * 60 * 60 * 24));\n    requiereAlerta = diasTranscurridos >= 15;\n  }\n  \n  return {\n    json: {\n      ...record,\n      diasTranscurridos,\n      requiereAlerta,\n      fechaProcesamiento: currentDate.toISOString()\n    }\n  };\n});\n\nreturn processedRecords;\n\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        544,
+        -48
+      ],
+      "id": "89b28bca-aac1-4723-b4d7-1090c5c942ba",
+      "name": "Verificar fechas y filtrar registros"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Este código prepara el contenido del email\nconst alertRecords = $input.all();\n\nif (alertRecords.length === 0) {\n  return [{\n    json: {\n      enviarEmail: false,\n      mensaje: 'No hay registros que requieran seguimiento'\n    }\n  }];\n}\n\n// Generar contenido del email\nlet emailBody = `\n<h2>🚨 Alerta de Seguimiento - sin Gestión</h2>\n<p>Los siguientes registros no han tenido gestión en los últimos 15 días:</p>\n\n<table border=\"1\" style=\"border-collapse: collapse; width: 100%;\">\n  <thead>\n    <tr style=\"background-color: #f2f2f2;\">\n      <th>Nombre Corto</th>\n      <th>Responsable</th>\n      <th>Institución</th>\n      <th>Última Gestión</th>\n      <th>Días Transcurridos</th>\n      <th>Contacto</th>\n      <th>Teléfono</th>\n    </tr>\n  </thead>\n  <tbody>\n`;\n\nalertRecords.forEach(item => {\n  const record = item.json;\n  emailBody += `\n    <tr>\n      <td>${record.nombreCorto || 'N/A'}</td>\n      <td>${record.responsable || 'N/A'}</td>\n      <td>${record.institucion || 'N/A'}</td>\n      <td>${record.fechaUltimaGestion || 'N/A'}</td>\n      <td style=\"color: red; font-weight: bold;\">${record.diasTranscurridos}</td>\n      <td>${record.contacto || 'N/A'}</td>\n      <td>${record.telefono || 'N/A'}</td>\n    </tr>\n  `;\n});\n\nemailBody += `\n  </tbody>\n</table>\n\n<p><strong>Total de registros que requieren atención: ${alertRecords.length}</strong></p>\n<p>Fecha de procesamiento: ${new Date().toLocaleString('es-ES')}</p>\n\n<hr>\n<p><i>Este es un mensaje automático del sistema de seguimiento de leads.</i></p>\n`;\n\nreturn [{\n  json: {\n    enviarEmail: true,\n    asunto: `🚨 Alerta: ${alertRecords.length} leads sin gestión por más de 15 días`,\n    cuerpoEmail: emailBody,\n    cantidadAlertas: alertRecords.length,\n    registrosAlerta: alertRecords.map(item => ({\n      nombreCorto: item.json.nombreCorto,\n      responsable: item.json.responsable,\n      diasTranscurridos: item.json.diasTranscurridos\n    }))\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        -144
+      ],
+      "id": "9d1273b5-3959-4141-8d81-70df37897922",
+      "name": "Preparar email de alerta"
+    },
+    {
+      "parameters": {
+        "sendTo": "=cripistian26@gmail.com",
+        "subject": "={{ $json.asunto }}",
+        "message": "={{ $json.cuerpoEmail }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1168,
+        -144
+      ],
+      "id": "dfd53ef7-9f13-4aa1-8d85-1b18afd22761",
+      "name": "Send a message",
+      "webhookId": "5396bebb-6402-4648-9ba0-ee4c0cfc3c10",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "XYwBmG9gLd22bulJ",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "958b7211-2c9e-47f1-9dd7-c3b5e4980d15",
+              "leftValue": "={{ $json.requiereAlerta }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        752,
+        -48
+      ],
+      "id": "eca46632-6492-4de3-8d2e-4f3fb4332fd2",
+      "name": "If (Filtrar solo registros con alerta)"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Download file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download file": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Procesar y limpiar datos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Procesar y limpiar datos": {
+      "main": [
+        [
+          {
+            "node": "Verificar fechas y filtrar registros",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar fechas y filtrar registros": {
+      "main": [
+        [
+          {
+            "node": "If (Filtrar solo registros con alerta)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar email de alerta": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If (Filtrar solo registros con alerta)": {
+      "main": [
+        [
+          {
+            "node": "Preparar email de alerta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "55d04caa-98aa-407b-acaf-9d0d509ff4dc",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "180c0ed70aef2aae145c9bd337f19ba8daf3bd26669a4e072d9205ae4ad10c1a"
+  },
+  "id": "diJtbM5x9iJp5Lzj",
+  "tags": []
+}
