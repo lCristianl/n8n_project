@@ -53,8 +53,7 @@ docker compose exec -u node n8n n8n update:workflow --all --active=true
 2. En la sección **WhatsApp /Configuracion de la API**, configura:
    - **Número de Prueba**: (en caso de querer otro del que viene por defecto)
    - **Para**: Este será el número al cual se le entregarán los mensajes
-   - **URL del Webhook**: `https://tu-dominio.com/webhook/321b4b98-9ede-4cf9-a7c5-e01edaaa4791`
-3. En el nodo de WhatsApp trigger agrega
+3. En el nodo de WhatsApp trigger agrega la credencial.
 
 ## 🔧 Configuración de Gemini Credenciales
 En el nodo de Google Gemini Chat Model agregar la credencial con el token de Gemini.
@@ -143,4 +142,10 @@ curl -I https://tu-dominio.com/healthz
 
 # Verificar puerto abierto
 sudo netstat -tlnp | grep :5678
+```
+
+### En caso de no haberse importado los workflows
+```bash
+# Comando para importar los workflows manualmente
+docker compose exec -u node n8n n8n import:workflow --separate --input=/workflows
 ```
